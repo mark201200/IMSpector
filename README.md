@@ -1,108 +1,83 @@
-# IMS Smartphone Test CLI
+# IMSpector
 
-Class-based Python CLI for IMS SIP testing in two modes:
+IMSpector is a Python CLI for IMS/SIP smartphone conformance and differential testing.
 
-1. Standard-based check: send crafted SIP messages and validate response against expected values in a test file.
-2. Differential check: run the same test against two phones and report response differences.
+It helps you:
+- validate test suites defined in YAML
+- run expected-response checks against one or more devices
+- compare behavior between devices to catch interoperability differences
+- switch transport backends without changing test logic
 
-The code is interface-first so transport and message I/O backends can be implemented later (Kamailio route relay, proxy container integration, etc.) without changing the test engine.
+## Why IMSpector
 
-## Project Structure
+- **Interface-first architecture**: transport and message I/O are cleanly separated from test execution.
+- **YAML-driven workflows**: test suites and runtime settings stay versioned and reproducible.
+- **Real + stub backends**: use `stub` for offline deterministic runs or `sip-proxy-http` for live traffic.
+- **Device discovery support**: discover devices from SIP REGISTER flows when using `sip-proxy-http`.
 
-- ims_tester/models.py: domain models and report models.
-- ims_tester/interfaces.py: interfaces for message send/read/modify and transport factory.
-- ims_tester/editor.py: default SIP message modifier implementation.
-- ims_tester/adapters.py: pluggable transport registry with `stub` and `sip-proxy-http` backends, plus device discoverers.
-- ims_tester/config.py: YAML config loaders and validation.
-- ims_tester/engine.py: standard and differential runners.
-- ims_tester/cli.py: command line app.
-- docs/test-config.md: schema documentation for test suite files.
-- docs/runtime-config.md: schema documentation for runtime files.
-- docs/discovery-methods.md: documentation for device discovery methods (sip-proxy vs open5gs).
-- docs/user-manual.md: user manual with CLI modes and commands.
-- examples/: sample YAML files.
+## Quick start
 
-## Quick Start
-
-1. Create/activate a Python environment.
+1. Create and activate a Python 3.10+ virtual environment.
 2. Install dependencies:
 
+   ```bash
    pip install -r requirements.txt
+   ```
 
-3. Validate the sample test suite:
+3. Validate a test suite:
 
+   ```bash
    python main.py validate --test-config examples/test_suite_register.yaml
+   ```
 
-4. List available devices (configured + auto-discovered from SIP REGISTER when using sip-proxy-http):
+4. List available devices:
 
+   ```bash
    python main.py list-devices --runtime-config examples/runtime_stub.yaml
+   ```
 
-5. Run standard mode with an explicit device:
+5. Run standard checks:
 
+   ```bash
    python main.py run-standard --test-config examples/test_suite_register.yaml --runtime-config examples/runtime_stub.yaml --device pixel_8
+   ```
 
-6. Run standard mode without `--device` (interactive selection from generated device list):
+6. Run differential comparison:
 
-   python main.py run-standard --test-config examples/test_suite_register.yaml --runtime-config examples/runtime_sip_proxy_http.yaml
+   ```bash
+   python main.py compare --test-config examples/test_suite_register.yaml --runtime-config examples/runtime_stub.yaml --device pixel_8 --device galaxy_s24
+   ```
 
-   In the prompt, enter one or more device numbers or IDs separated by commas, for example `1,2` or `1,2,3`.
+## Commands
 
-7. Run differential mode:
+- `validate`: validate test suite YAML.
+- `list-devices`: show configured and discovered devices.
+- `run-standard`: run expected-response checks for selected devices.
+- `compare`: run cross-device differential checks.
+- `live-edit-list`: list active `ims_proxy` live-edit rules.
+- `live-edit-clear`: clear active `ims_proxy` live-edit rules.
 
-   python main.py compare --test-config examples/test_suite_register.yaml --runtime-config examples/runtime_stub.yaml --device-a pixel_8 --device-b galaxy_s24
+## Exit codes
 
-8. Run against the real sip_proxy tester API:
+- `0`: success
+- `2`: configuration validation error
+- `10`: standard run finished with at least one failed case
+- `11`: differential run found differences
 
-   python main.py run-standard --test-config examples/test_suite_register.yaml --runtime-config examples/runtime_sip_proxy_http.yaml
+## Documentation
 
-9. Run YAML-driven live interception (send + intercept; defined inside test file):
+- `/docs/user-manual.md` — end-to-end usage guide
+- `/docs/test-config.md` — test suite schema
+- `/docs/runtime-config.md` — runtime schema and transport config
+- `/docs/discovery-methods.md` — device discovery methods
+- `/docs/http-sip-proxy.md` — SIP proxy integration details
+- `/docs/test-program-architecture.md` — architecture overview
 
-   python main.py run-standard --test-config examples/test_suite_invite_intercept_content_type_test.yaml --runtime-config examples/runtime_sip_proxy_http.yaml
+## Project structure
 
-10. Run intercept-only mode (wait for matching live traffic, no template send):
-
-   python main.py run-standard --test-config examples/test_suite_invite_intercept_only_content_type_test.yaml --runtime-config examples/runtime_sip_proxy_http.yaml
-
-11. Optional manual rule inspection:
-
-   python main.py live-edit-list --runtime-config examples/runtime_sip_proxy_http.yaml
-
-12. Optional manual rule clear:
-
-   python main.py live-edit-clear --runtime-config examples/runtime_sip_proxy_http.yaml
-
-## Command Summary
-
-- validate: validates a test suite YAML file.
-- list-devices: prints configured devices plus SIP REGISTER-discovered devices (sip-proxy-http).
-- run-standard: executes expected-response checks for one or more devices; if `--device` is omitted, prompts from available devices.
-- compare: executes two-device response comparison.
-- live-edit-list: prints currently active ims_proxy live edit rules.
-- live-edit-clear: removes all active ims_proxy live edit rules.
-
-Note: `message.intercept_only: true` cases are supported in `run-standard` mode.
-
-Exit codes:
-
-- 0: success.
-- 2: configuration validation error.
-- 10: run-standard completed but at least one case failed.
-- 11: compare completed and differences were found.
-
-## Interface-First Design
-
-Transports are pluggable. This project includes:
-
-- `stub` for deterministic/offline runs
-- `sip-proxy-http` for real communication through the `sip_proxy` tester API
-
-When using `sip-proxy-http`, runtime YAML can omit `devices` and rely on auto-discovery from observed SIP REGISTER traffic.
-
-You can still add more backends later by implementing:
-
-- SipMessageSender
-- SipMessageReader
-- SipMessageModifier
-- SipTransport
-
-See docs/runtime-config.md for how backend selection is configured.
+- `/ims_tester/cli.py` — command definitions and execution flow
+- `/ims_tester/engine.py` — standard and differential test runners
+- `/ims_tester/adapters.py` — pluggable transports and discovery adapters
+- `/ims_tester/config.py` — YAML loading + validation
+- `/ims_tester/models.py` — domain and report models
+- `/examples/` — runnable sample configurations
